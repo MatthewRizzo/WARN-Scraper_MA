@@ -1,0 +1,10 @@
+[package]
+name = "scraper_cli"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+web_scraper = { path = "../web_scraper" }
+protobuf-json-mapping = "3.2.0"

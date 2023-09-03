@@ -1,0 +1,28 @@
+[package]
+name = "WARN-Scraper_MA"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+members = [
+    "proto_generator",
+    "web_scraper",
+    "scraper_cli"
+]
+
+[dependencies]
+protobuf = "3.2.0"
+protobuf-json-mapping = "3.2.0"
+thiserror = "1.0.47"
+# proto_generator = { path = "proto_generator" }
+web_scraper = { path = "web_scraper" }
+
+
+[build-dependencies]
+protobuf-codegen = "3"
+
+
+[[bin]]
+path = "scraper_cli/src/main.rs"
+name = "web_scraper_cli"

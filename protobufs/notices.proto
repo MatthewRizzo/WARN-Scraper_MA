@@ -1,0 +1,12 @@
+syntax = "proto2";
+
+message WARNNotice {
+    optional string firm_name = 1;
+    optional string firm_locations = 2;
+    optional string affected_employees = 3;
+    optional string effective_date = 4;
+}
+
+message WARNNotices {
+    repeated WARNNotice notices = 1;
+}
