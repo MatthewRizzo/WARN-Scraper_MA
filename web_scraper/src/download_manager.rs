@@ -39,17 +39,12 @@ impl<'a> DownloaderWrapper<'a> {
         }
     }
     pub(crate) fn download_file(&self) -> ScraperResult<()> {
-        if self.download_directory.exists() {
-            fs::remove_dir_all(self.download_directory)?;
-        }
-        fs::create_dir_all(self.download_directory)?;
-
-        let curl_location = Self::get_path_to_curl_exe()?;
+        self.prep_for_download()?;
 
         // curling a .xslx file downgrades it to a zip file unless the -J flag
         // is used in tandem with -O to force the usage of the page's headers.
         // Side affects include the file having a garbage name.
-        let output = Command::new(curl_location)
+        let output = Command::new(Self::get_path_to_curl_exe()?)
             .current_dir(self.download_directory)
             .arg("-O")
             .arg("-J")
@@ -77,24 +72,7 @@ impl<'a> DownloaderWrapper<'a> {
             );
         }
 
-        let move_str: String = format!(
-            "Moving {} to {}",
-            &tmp_download_location.display(),
-            self.downloaded_file_path.display()
-        );
-
-        if self.is_verbose {
-            println!("{}", move_str);
-        }
-
-        fs::rename(&tmp_download_location, self.downloaded_file_path).map_err(|err| {
-            ScraperError::Downloading(format!(
-                "Error renaming file from {} to {}: {}",
-                tmp_download_location.display(),
-                self.downloaded_file_path.display(),
-                err.to_string()
-            ))
-        })?;
+        self.rename_file(tmp_download_location)?;
 
         Ok(())
     }
@@ -196,5 +174,39 @@ impl<'a> DownloaderWrapper<'a> {
                 }
             }
         }
+    }
+
+    /// preps the file system for the download via curl
+    fn prep_for_download(&self) -> ScraperResult<()>{
+        if self.download_directory.exists() {
+            fs::remove_dir_all(self.download_directory)?;
+        }
+        fs::create_dir_all(self.download_directory)?;
+
+        Ok(())
+    }
+
+    /// Renames the downloaded file from its garbage name to the one expected
+    fn rename_file(&self, tmp_download_location: PathBuf) ->ScraperResult<()> {
+        let move_str: String = format!(
+            "Moving {} to {}",
+            &tmp_download_location.display(),
+            self.downloaded_file_path.display()
+        );
+
+        if self.is_verbose {
+            println!("{}", move_str);
+        }
+
+        fs::rename(&tmp_download_location, self.downloaded_file_path).map_err(|err| {
+            ScraperError::Downloading(format!(
+                "Error renaming file from {} to {}: {}",
+                tmp_download_location.display(),
+                self.downloaded_file_path.display(),
+                err.to_string()
+            ))
+        })?;
+
+        Ok(())
     }
 }
