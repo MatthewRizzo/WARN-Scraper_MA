@@ -1,3 +1,4 @@
+mod download_manager;
 mod error;
 mod notice_paragraph_parser;
 pub mod scraper;

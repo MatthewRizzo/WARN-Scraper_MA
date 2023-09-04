@@ -8,7 +8,7 @@ use scraper::{Element, ElementRef};
 /// information.
 /// This struct implements an iterator over HTML siblings starting from the
 /// first sibling provided.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub(crate) struct ScraperSiblingElement<'a> {
     current_sibling: Option<ElementRef<'a>>,
 }
@@ -19,6 +19,14 @@ impl<'a> ScraperSiblingElement<'a> {
     pub(crate) fn new(initial_sibling: ElementRef<'a>) -> ScraperSiblingElement {
         ScraperSiblingElement {
             current_sibling: Some(initial_sibling),
+        }
+    }
+
+    /// Creates an eas-to-use iterator of siblings based on their parent
+    pub(crate) fn from_parent(parent_element: ElementRef<'a>) -> ScraperSiblingElement {
+        let first_child = parent_element.first_element_child();
+        ScraperSiblingElement {
+            current_sibling: first_child,
         }
     }
 }

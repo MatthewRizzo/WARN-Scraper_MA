@@ -1,35 +1,54 @@
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
 use crate::{
+    download_manager::Downloader,
     error::{ScraperError, ScraperResult},
     notice_paragraph_parser::{NoticeParagraphParser, INDIVIDUAL_NOTICE_PREFIX},
     scraper_adapter,
     scraper_adapter::ScraperSiblingElement,
 };
+use protobuf::{plugin::code_generator_response::File, text_format::ParseError};
 use scraper::{Element, ElementRef, Html, Selector};
 
 use proto_generator::notices::WARNNotices;
 
 static WARN_HEADING: &str = "Companies that submitted WARN notices this past week";
 static CURRENT_YEAR_REPORT_TEXT: &str = "WARN Report for the week ending";
+static DOWNLOADED_FILE_PATH_PREFIX: &str = "/tmp/WARN_report";
+static DOWNLOADED_FILE_PATH_SUFFIX: &str = ".xslx";
 
 /// Struct to adapt the scraper crate to our use cases
 pub struct ScraperAdapter {
     document: Html,
+    base_url: String,
 }
 
 impl ScraperAdapter {
-    pub fn new(page_to_request_url: &str) -> ScraperResult<ScraperAdapter> {
-        let main_page_html = reqwest::blocking::get(page_to_request_url)?.text()?;
+    /// # Params
+    /// * base_url - The base url (i.e. http://foo/)
+    /// * relative_page_to_request_url - the page relative to the base url to request
+    pub fn new(
+        base_url: String,
+        relative_page_to_request_url: &str,
+    ) -> ScraperResult<ScraperAdapter> {
+        let full_page_to_request_url =
+            Self::construct_full_url(&base_url, &relative_page_to_request_url)?;
+
+        let main_page_html = reqwest::blocking::get(full_page_to_request_url)?.text()?;
         let document = Html::parse_document(&main_page_html);
 
-        Ok(ScraperAdapter { document })
+        Ok(ScraperAdapter { document, base_url })
     }
 
     pub fn get_notices(&self) -> ScraperResult<WARNNotices> {
         let notice_section: ElementRef = self.get_submit_notice_reference(&self.document)?;
         let notice_section_first_sibling = Self::get_notices_first_child(notice_section.clone())?;
+        let ytd_notices = self.get_current_ytd_warn_notices(notice_section_first_sibling)?;
 
         let notices = self.get_notices_from_section(notice_section_first_sibling)?;
-        let ytd_notices = self.get_current_ytd_warn_notices(notice_section_first_sibling)?;
         Ok(notices)
     }
 
@@ -114,20 +133,28 @@ impl ScraperAdapter {
     /// year to date warn notices.
     ///
     /// # Params
-    /// * The reference to the
+    /// * The reference to the first element of the notice paragraphs
     fn get_current_ytd_warn_notices<'a>(
         &self,
         notice_section_first_sibling: ScraperSiblingElement<'a>,
     ) -> ScraperResult<()> {
         let notice_children =
             notice_section_first_sibling.map(|notice_element| notice_element.first_element_child());
-        let ytd_notice_element = Self::flatten_yearly_report(notice_children)?;
+        let ytd_notice_element: ElementRef<'a> = Self::flatten_yearly_report(notice_children)?;
 
-        if let Some(href) = ytd_notice_element.value().attr("href") {
-            println!("Found href = {}", href)
-        }
+        let href = ytd_notice_element.value().attr("href").ok_or_else(|| {
+            ScraperError::Parsing(format!(
+                "Yearly report element {} does not have an href!",
+                scraper_adapter::element_text_to_string(&ytd_notice_element)
+            ))
+        })?;
 
-        // TODO - use the href to download the file
+        let full_download_url = Self::construct_full_url(&self.base_url, &href)?;
+        let year = Self::get_year_from_yearly_report_element(ytd_notice_element);
+        let downloaded_file_path = Self::create_download_filename(&year)?;
+        let downloader = Downloader::new(full_download_url.to_string(), downloaded_file_path);
+        downloader.download_file()?;
+
         Ok(())
     }
 
@@ -200,5 +227,44 @@ impl ScraperAdapter {
             .to_owned();
 
         Ok(yearly_report_element)
+    }
+
+    fn create_download_filename(year: &str) -> ScraperResult<PathBuf> {
+        let full_path_str = format!(
+            "{}{}{}",
+            DOWNLOADED_FILE_PATH_PREFIX, year, DOWNLOADED_FILE_PATH_SUFFIX
+        );
+
+        Ok(PathBuf::from_str(&full_path_str)?)
+    }
+
+    /// Retrieve the year from the full user-available string. The user is given
+    /// the year....We just want to extact it from there
+    fn get_year_from_yearly_report_element<'a>(yearly_report_element: ElementRef<'a>) -> String {
+        let full_text = scraper_adapter::element_text_to_string(&yearly_report_element);
+        full_text.chars().rev().take(2).collect::<String>()
+    }
+
+    fn construct_full_url(base_url: &str, relative_url: &str) -> ScraperResult<String> {
+        let base_url: String = match base_url.ends_with("/") {
+            true => base_url.chars().rev().take(1).collect::<String>(),
+            false => base_url.to_string(),
+        };
+
+        let relative_url_start_no_slash = match relative_url.starts_with("/") {
+            true => relative_url
+                .chars()
+                .next()
+                .map(|char| &relative_url[char.len_utf8()..])
+                .ok_or_else(|| {
+                    ScraperError::Downloading(
+                        "Error Constructing a full url for download".to_string(),
+                    )
+                })?,
+            false => relative_url,
+        };
+
+        let full_path = format!("{}/{}", base_url, relative_url_start_no_slash);
+        Ok(full_path)
     }
 }
