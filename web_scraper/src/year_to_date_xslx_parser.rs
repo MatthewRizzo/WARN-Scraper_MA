@@ -1,30 +1,37 @@
 //! Module implementing reading of csv files
 use chrono::{Duration, NaiveDate};
 use office::{DataType, Excel};
-use proto_generator::notices::{WARNNotice, WARNNotices};
+use proto_generator::{
+    notice_collector::NoticeCollector,
+    notices::{WARNNotice, WARNNotices},
+};
 use std::path::PathBuf;
 
-use crate::{
-    error::{ScraperError, ScraperResult},
-    notice_collector::NoticeCollector,
-};
+use crate::error::{ScraperError, ScraperResult};
 
 /// the headings start at row 3, but the data we need starts in row 4
 static START_ROW_NUMBER: u32 = 3;
 
 pub(crate) struct YearToDateParser {
     workbook: Excel,
+    is_verbose: bool,
 }
 
 impl YearToDateParser {
-    pub fn new(path_to_file: &PathBuf) -> ScraperResult<YearToDateParser> {
-        println!("Opening {}", path_to_file.display());
+    pub fn new(path_to_file: &PathBuf, is_verbose: bool) -> ScraperResult<YearToDateParser> {
+        if is_verbose {
+            println!("Opening {}", path_to_file.display());
+        }
+
         let workbook = match Excel::open(path_to_file) {
             Err(office_error) => panic!("Error opening workbook: {}", office_error.to_string()),
             Ok(workbook) => workbook,
         };
 
-        Ok(YearToDateParser { workbook })
+        Ok(YearToDateParser {
+            workbook,
+            is_verbose,
+        })
     }
 
     pub fn parse_for_notices(&mut self) -> ScraperResult<WARNNotices> {
@@ -35,7 +42,9 @@ impl YearToDateParser {
 
         sheet_names
             .into_iter()
-            .map(|sheet_name| Self::parse_worksheet(sheet_name, &mut self.workbook))
+            .map(|sheet_name| {
+                Self::parse_worksheet(sheet_name, &mut self.workbook, self.is_verbose)
+            })
             .collect::<ScraperResult<Vec<WARNNotices>>>()?
             .into_iter()
             .reduce(|a: WARNNotices, b: WARNNotices| NoticeCollector::reduce_notices(a, b))
@@ -47,7 +56,11 @@ impl YearToDateParser {
     }
 
     /// Parses an individual worksheet for it's notices
-    fn parse_worksheet(sheet_name: String, workbook: &mut Excel) -> ScraperResult<WARNNotices> {
+    fn parse_worksheet(
+        sheet_name: String,
+        workbook: &mut Excel,
+        is_verbose: bool,
+    ) -> ScraperResult<WARNNotices> {
         let sheet_range = match workbook.worksheet_range(sheet_name.as_str()) {
             Err(office_error) => panic!("Error getting sheet range: {}", office_error.to_string()),
             Ok(sheet_range) => sheet_range,
@@ -76,9 +89,9 @@ impl YearToDateParser {
 
             // convert to a notice
             let notice = WARNNotice {
-                firm_name: Self::check_for_value(firm_name),
-                firm_locations: Self::check_for_value(firm_locations),
-                affected_employees: Self::check_for_value(affected_employees),
+                firm_name: Self::check_for_value(firm_name, is_verbose),
+                firm_locations: Self::check_for_value(firm_locations, is_verbose),
+                affected_employees: Self::check_for_value(affected_employees, is_verbose),
                 effective_date: Self::convert_date(effective_date),
                 date_received: Self::convert_date(date_received),
                 special_fields: ::std::default::Default::default(),
@@ -96,12 +109,14 @@ impl YearToDateParser {
     /// # Return
     /// * None if the cell is not a string or cannot be converted to a string
     /// * Some(item) if it is string-compatible
-    fn check_for_value(data: &DataType) -> Option<String> {
+    fn check_for_value(data: &DataType, is_verbose: bool) -> Option<String> {
         match data {
             DataType::Bool(_) => None,
             DataType::Empty => None,
             DataType::Error(err) => {
-                println!("Error from cell! {:?}", err);
+                if is_verbose {
+                    println!("Error from cell! {:?}", err);
+                }
                 None
             }
             DataType::Int(value) => Some(value.to_string()),

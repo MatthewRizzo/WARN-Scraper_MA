@@ -12,10 +12,11 @@ members = [
 ]
 
 [dependencies]
+clap = { version = "4.4.2", features = ["derive"] }
 protobuf = "3.2.0"
 protobuf-json-mapping = "3.2.0"
 thiserror = "1.0.47"
-# proto_generator = { path = "proto_generator" }
+proto_generator = { path = "proto_generator" }
 web_scraper = { path = "web_scraper" }
 
 

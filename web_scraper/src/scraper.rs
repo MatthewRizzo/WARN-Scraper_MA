@@ -3,7 +3,6 @@ use std::{path::PathBuf, str::FromStr};
 use crate::{
     download_manager::DownloaderWrapper,
     error::{ScraperError, ScraperResult},
-    notice_collector::NoticeCollector,
     notice_paragraph_parser::{NoticeParagraphParser, INDIVIDUAL_NOTICE_PREFIX},
     scraper_adapter,
     scraper_adapter::ScraperSiblingElement,
@@ -11,7 +10,7 @@ use crate::{
 };
 use scraper::{Element, ElementRef, Html, Selector};
 
-use proto_generator::notices::WARNNotices;
+use proto_generator::{notice_collector::NoticeCollector, notices::WARNNotices};
 
 const WARN_HEADING: &str = "Companies that submitted WARN notices this past week";
 const CURRENT_YEAR_REPORT_TEXT: &str = "WARN Report for the week ending";
@@ -27,6 +26,7 @@ impl Parser {}
 pub struct ScraperAdapter {
     document: Html,
     base_url: String,
+    is_verbose: bool,
 }
 
 /// TODO - split this into its pure scraper to retrieve information, and
@@ -42,6 +42,7 @@ impl ScraperAdapter {
     pub fn new(
         base_url: String,
         relative_page_to_request_url: &str,
+        is_verbose: bool,
     ) -> ScraperResult<ScraperAdapter> {
         let full_page_to_request_url =
             Self::construct_full_url(&base_url, &relative_page_to_request_url)?;
@@ -49,7 +50,11 @@ impl ScraperAdapter {
         let main_page_html = reqwest::blocking::get(full_page_to_request_url)?.text()?;
         let document = Html::parse_document(&main_page_html);
 
-        Ok(ScraperAdapter { document, base_url })
+        Ok(ScraperAdapter {
+            document,
+            base_url,
+            is_verbose,
+        })
     }
 
     pub fn get_notices(&self) -> ScraperResult<WARNNotices> {
@@ -176,10 +181,11 @@ impl ScraperAdapter {
             full_download_url.to_string(),
             &downloaded_file_path,
             &download_directory,
+            self.is_verbose,
         );
         downloader.download_file()?;
 
-        let mut xslx_parser = YearToDateParser::new(&downloaded_file_path)?;
+        let mut xslx_parser = YearToDateParser::new(&downloaded_file_path, self.is_verbose)?;
         let xslx_notices = xslx_parser.parse_for_notices()?;
 
         Ok(xslx_notices)

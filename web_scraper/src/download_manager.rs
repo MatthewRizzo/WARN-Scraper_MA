@@ -12,6 +12,7 @@ pub(crate) struct DownloaderWrapper<'a> {
     download_url: String,
     downloaded_file_path: &'a PathBuf,
     download_directory: &'a PathBuf,
+    is_verbose: bool,
 }
 
 impl<'a> Drop for DownloaderWrapper<'a> {
@@ -28,11 +29,13 @@ impl<'a> DownloaderWrapper<'a> {
         download_url: String,
         downloaded_file_path: &'a PathBuf,
         download_directory: &'a PathBuf,
+        is_verbose: bool,
     ) -> DownloaderWrapper<'a> {
         DownloaderWrapper {
             download_url,
             downloaded_file_path,
             download_directory,
+            is_verbose,
         }
     }
     pub(crate) fn download_file(&self) -> ScraperResult<()> {
@@ -58,7 +61,7 @@ impl<'a> DownloaderWrapper<'a> {
                     err.to_string()
                 ))
             })?;
-        
+
         if self.is_verbose {
             println!("Curl output:");
             println!("{}", String::from_utf8_lossy(&output.stdout));
@@ -80,7 +83,9 @@ impl<'a> DownloaderWrapper<'a> {
             self.downloaded_file_path.display()
         );
 
-        println!("{}", move_str);
+        if self.is_verbose {
+            println!("{}", move_str);
+        }
 
         fs::rename(&tmp_download_location, self.downloaded_file_path).map_err(|err| {
             ScraperError::Downloading(format!(

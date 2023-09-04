@@ -20,6 +20,4 @@ pub enum ScraperError {
     Request(#[from] reqwest::Error),
     #[error("Infallible error - strange")]
     Infallible(#[from] core::convert::Infallible),
-    // #[error("Excel Error")]
-    // Excel(#[from] office::Error),
 }
