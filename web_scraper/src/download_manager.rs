@@ -46,32 +46,33 @@ impl<'a> DownloaderWrapper<'a> {
         // curling a .xslx file downgrades it to a zip file unless the -J flag
         // is used in tandem with -O to force the usage of the page's headers.
         // Side affects include the file having a garbage name.
-        let cmd_handler = Command::new(curl_location)
+        let output = Command::new(curl_location)
             .current_dir(self.download_directory)
             .arg("-O")
             .arg("-J")
             .arg("https://www.mass.gov/doc/warn-report-for-the-week-ending-august-25-2023/download")
-            .spawn()
+            .output()
             .map_err(|err| {
                 ScraperError::Downloading(format!(
                     "Error running curl command: {}",
                     err.to_string()
                 ))
             })?;
-        let _ = cmd_handler.wait_with_output().map_err(|err| {
-            ScraperError::Downloading(format!(
-                "Error waiting for curl command to finish: {}",
-                err.to_string()
-            ))
-        })?;
+        
+        if self.is_verbose {
+            println!("Curl output:");
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            println!("{}", String::from_utf8_lossy(&output.stderr));
+        }
 
         let tmp_download_location = self.get_path_to_file_downloaded();
-
-        println!(
-            "Downloaded yearly update file from {} to {}",
-            self.download_url,
-            &tmp_download_location.display()
-        );
+        if self.is_verbose {
+            println!(
+                "Downloaded yearly update file from {} to {}",
+                self.download_url,
+                &tmp_download_location.display()
+            );
+        }
 
         let move_str: String = format!(
             "Moving {} to {}",
