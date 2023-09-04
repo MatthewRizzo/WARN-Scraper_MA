@@ -23,10 +23,19 @@ It has 3 components:
    4. For now, it just acts to clearly define the schema between producer and consumer.
 
 ## Running the Program
+[jq]: https://jqlang.github.io/jq/manual/
 
 You must first perform the setup in [Setup Requirements](#setup-requirements).
 
 Then just execute `cargo run` to see your options!
+
+Note that sometimes the notices will be output as json's.
+To properly view them, you should pipe the results using [jq].
+For example:
+
+```bash
+cargo run search <company name> | jq .notices
+```
 
 ## Setup Requirements
 
