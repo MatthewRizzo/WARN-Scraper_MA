@@ -2,6 +2,36 @@
 
 [Weekly Report Page]: https://www.mass.gov/info-details/worker-adjustment-and-retraining-act-warn-weekly-report
 
+[WARN Act]: https://en.wikipedia.org/wiki/Worker_Adjustment_and_Retraining_Notification_Act_of_1988
+
+## What is a WARN Notice
+
+The WARN Act in the United States requires providers to report layoffs under
+certain conditions 60 calendar days before they occur.
+The purpose is to give workers time to find a new job.
+Failure to report the layoffs can result in fines and other penalities.
+See more information on the [WARN Act] Wikipidea page.
+
+Though the concept seems reassuring, what firms often do is discretely submit the
+WARN Notice to the appropriate state bodies, but not inform their workers until
+the effective date.
+Though they do not break the letter of the law, it is definitely not in the WARN
+Act's spirit.
+
+Employees would have to constantly check their state's WARN Act reporting
+website to keep apprised of their potential layoff 60 days in advance.
+This is not convenient.
+
+In comes this project. This project scapes Massachusets' WARN Reporting site
+to retrieve all warn notices given in the last week and historical data from the
+current fiscal year and collates it.
+
+Users of the project could search for a specific company through its CLI and
+see if the company in question has reported layoffs in the next 60 calendar 
+days.
+
+## What is this Project
+
 Rust-based scraper the Massachusetts WARN Act Notice [Weekly Report Page].
 It has 3 components:
 
@@ -23,6 +53,7 @@ It has 3 components:
    4. For now, it just acts to clearly define the schema between producer and consumer.
 
 ## Running the Program
+
 [jq]: https://jqlang.github.io/jq/manual/
 
 You must first perform the setup in [Setup Requirements](#setup-requirements).
