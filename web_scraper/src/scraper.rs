@@ -1,24 +1,27 @@
-use std::{
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::{path::PathBuf, str::FromStr};
 
 use crate::{
-    download_manager::Downloader,
+    download_manager::DownloaderWrapper,
     error::{ScraperError, ScraperResult},
+    notice_collector::NoticeCollector,
     notice_paragraph_parser::{NoticeParagraphParser, INDIVIDUAL_NOTICE_PREFIX},
     scraper_adapter,
     scraper_adapter::ScraperSiblingElement,
+    year_to_date_xslx_parser::YearToDateParser,
 };
-use protobuf::{plugin::code_generator_response::File, text_format::ParseError};
 use scraper::{Element, ElementRef, Html, Selector};
 
 use proto_generator::notices::WARNNotices;
 
-static WARN_HEADING: &str = "Companies that submitted WARN notices this past week";
-static CURRENT_YEAR_REPORT_TEXT: &str = "WARN Report for the week ending";
-static DOWNLOADED_FILE_PATH_PREFIX: &str = "/tmp/WARN_report";
-static DOWNLOADED_FILE_PATH_SUFFIX: &str = ".xslx";
+const WARN_HEADING: &str = "Companies that submitted WARN notices this past week";
+const CURRENT_YEAR_REPORT_TEXT: &str = "WARN Report for the week ending";
+const DOWNLOADED_FILE_PATH_DIRECTORY: &str = "/tmp/WARN_Reports/";
+const DOWNLOADED_FILE_PATH_AFTER_DIRECTORY: &str = "WARN_report_20";
+const DOWNLOADED_FILE_PATH_SUFFIX: &str = ".xlsx";
+
+pub struct Parser {}
+
+impl Parser {}
 
 /// Struct to adapt the scraper crate to our use cases
 pub struct ScraperAdapter {
@@ -26,6 +29,12 @@ pub struct ScraperAdapter {
     base_url: String,
 }
 
+/// TODO - split this into its pure scraper to retrieve information, and
+/// consumer of that information. I.e. the download and parsing of the file
+/// should not be happening here.
+/// Make refactor it out to have a parsing controller that uses this and the
+/// xlsx parser. External parties will ONLY have access to that parsing
+/// controller.
 impl ScraperAdapter {
     /// # Params
     /// * base_url - The base url (i.e. http://foo/)
@@ -46,10 +55,20 @@ impl ScraperAdapter {
     pub fn get_notices(&self) -> ScraperResult<WARNNotices> {
         let notice_section: ElementRef = self.get_submit_notice_reference(&self.document)?;
         let notice_section_first_sibling = Self::get_notices_first_child(notice_section.clone())?;
-        let ytd_notices = self.get_current_ytd_warn_notices(notice_section_first_sibling)?;
 
-        let notices = self.get_notices_from_section(notice_section_first_sibling)?;
-        Ok(notices)
+        let ytd_notices = match self.get_current_ytd_warn_notices(notice_section_first_sibling) {
+            Ok(notices) => notices,
+            Err(err) => panic!(
+                "Error when getting year-to-date notices: {}",
+                err.to_string()
+            ),
+        };
+
+        let current_week_notices: WARNNotices =
+            self.get_notices_from_section(notice_section_first_sibling)?;
+        let overall_notices: WARNNotices =
+            NoticeCollector::reduce_notices(current_week_notices, ytd_notices);
+        Ok(overall_notices)
     }
 
     /// Returns an element reference to the first element under the submission
@@ -137,7 +156,7 @@ impl ScraperAdapter {
     fn get_current_ytd_warn_notices<'a>(
         &self,
         notice_section_first_sibling: ScraperSiblingElement<'a>,
-    ) -> ScraperResult<()> {
+    ) -> ScraperResult<WARNNotices> {
         let notice_children =
             notice_section_first_sibling.map(|notice_element| notice_element.first_element_child());
         let ytd_notice_element: ElementRef<'a> = Self::flatten_yearly_report(notice_children)?;
@@ -152,10 +171,18 @@ impl ScraperAdapter {
         let full_download_url = Self::construct_full_url(&self.base_url, &href)?;
         let year = Self::get_year_from_yearly_report_element(ytd_notice_element);
         let downloaded_file_path = Self::create_download_filename(&year)?;
-        let downloader = Downloader::new(full_download_url.to_string(), downloaded_file_path);
+        let download_directory = PathBuf::from_str(DOWNLOADED_FILE_PATH_DIRECTORY)?;
+        let downloader = DownloaderWrapper::new(
+            full_download_url.to_string(),
+            &downloaded_file_path,
+            &download_directory,
+        );
         downloader.download_file()?;
 
-        Ok(())
+        let mut xslx_parser = YearToDateParser::new(&downloaded_file_path)?;
+        let xslx_notices = xslx_parser.parse_for_notices()?;
+
+        Ok(xslx_notices)
     }
 
     /// There is an empty section between the the parent section of notices
@@ -231,18 +258,26 @@ impl ScraperAdapter {
 
     fn create_download_filename(year: &str) -> ScraperResult<PathBuf> {
         let full_path_str = format!(
-            "{}{}{}",
-            DOWNLOADED_FILE_PATH_PREFIX, year, DOWNLOADED_FILE_PATH_SUFFIX
+            "{}{}{}{}",
+            DOWNLOADED_FILE_PATH_DIRECTORY,
+            DOWNLOADED_FILE_PATH_AFTER_DIRECTORY,
+            year,
+            DOWNLOADED_FILE_PATH_SUFFIX
         );
 
         Ok(PathBuf::from_str(&full_path_str)?)
     }
 
     /// Retrieve the year from the full user-available string. The user is given
-    /// the year....We just want to extact it from there
+    /// the year....We just want to extract it from there
     fn get_year_from_yearly_report_element<'a>(yearly_report_element: ElementRef<'a>) -> String {
         let full_text = scraper_adapter::element_text_to_string(&yearly_report_element);
-        full_text.chars().rev().take(2).collect::<String>()
+        let year_digits_reversed = full_text.chars().rev().take(2).collect::<String>();
+        year_digits_reversed
+            .chars()
+            .rev()
+            .take(2)
+            .collect::<String>()
     }
 
     fn construct_full_url(base_url: &str, relative_url: &str) -> ScraperResult<String> {

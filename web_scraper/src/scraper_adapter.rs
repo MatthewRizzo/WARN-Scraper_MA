@@ -21,14 +21,6 @@ impl<'a> ScraperSiblingElement<'a> {
             current_sibling: Some(initial_sibling),
         }
     }
-
-    /// Creates an eas-to-use iterator of siblings based on their parent
-    pub(crate) fn from_parent(parent_element: ElementRef<'a>) -> ScraperSiblingElement {
-        let first_child = parent_element.first_element_child();
-        ScraperSiblingElement {
-            current_sibling: first_child,
-        }
-    }
 }
 
 impl<'a> Iterator for ScraperSiblingElement<'a> {

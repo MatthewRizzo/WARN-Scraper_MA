@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-curl = "0.4.44"
+chrono = "0.4.28"
 ego-tree = "0.6.2"
 office = "0.8.1"
 proto_generator = { path = "../proto_generator" }

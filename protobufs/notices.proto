@@ -5,6 +5,7 @@ message WARNNotice {
     optional string firm_locations = 2;
     optional string affected_employees = 3;
     optional string effective_date = 4;
+    optional string date_received = 5;
 }
 
 message WARNNotices {
