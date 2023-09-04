@@ -41,11 +41,14 @@ pub(crate) struct SearchForNotice {
 impl PerformScraping for GetAllNotices {
     fn run_command(&self, is_verbose: bool) {
         let found_notices: WARNNotices = self.do_scraping(is_verbose);
-        found_notices
+        let merged_notices = found_notices
             .notices
             .into_iter()
             .map(NoticeCollector::to_notices)
-            .reduce(NoticeCollector::reduce_notices);
+            .reduce(NoticeCollector::reduce_notices)
+            .unwrap();
+        let json_string = protobuf_json_mapping::print_to_string(&merged_notices).unwrap();
+        println!("{}", json_string);
     }
 }
 
